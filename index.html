@@ -1,0 +1,525 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>打刻</title>
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="打刻">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<meta name="theme-color" content="#EEF3EE" media="(prefers-color-scheme: light)">
+<meta name="theme-color" content="#121A1F" media="(prefers-color-scheme: dark)">
+<meta name="format-detection" content="telephone=no">
+<link rel="apple-touch-icon" href="apple-touch-icon.png">
+<style>
+:root {
+  --paper: #EEF3EE;
+  --card: #FFFFFF;
+  --ink: #1D2B3A;
+  --sub: #5C6B76;
+  --rule: #C3D0C6;
+  --c-in: #1E8E5A;
+  --c-out: #B8433A;
+  --c-bs: #B97A0A;
+  --c-be: #2D8C8C;
+  --warn-bg: #FFF4D6;
+  --warn-ink: #6B4A00;
+}
+@media (prefers-color-scheme: dark) {
+  :root {
+    --paper: #121A1F;
+    --card: #1B252C;
+    --ink: #E6EDF0;
+    --sub: #9BABB5;
+    --rule: #33434D;
+    --c-in: #2FA56E;
+    --c-out: #D05A50;
+    --c-bs: #D09A2A;
+    --c-be: #3FA5A5;
+    --warn-bg: #3A3013;
+    --warn-ink: #F3DFA6;
+  }
+}
+* { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+html { height: 100%; -webkit-text-size-adjust: 100%; }
+body {
+  margin: 0; min-height: 100%;
+  background: var(--paper); color: var(--ink);
+  font-family: "Hiragino Sans", "Hiragino Kaku Gothic ProN", "Yu Gothic", "Noto Sans JP", system-ui, sans-serif;
+  font-size: 16px; line-height: 1.6;
+  padding: env(safe-area-inset-top, 0px) 0 calc(72px + env(safe-area-inset-bottom, 0px));
+  touch-action: manipulation;
+}
+main { max-width: 480px; margin: 0 auto; padding: 16px 16px 8px; }
+.view[hidden] { display: none; }
+h1 { font-size: 20px; margin: 4px 0 12px; font-weight: 700; }
+button, input { font: inherit; color: inherit; }
+button { cursor: pointer; -webkit-user-select: none; user-select: none; }
+:focus-visible { outline: 3px solid var(--c-be); outline-offset: 2px; }
+
+/* お知らせ */
+.notice {
+  background: var(--warn-bg); color: var(--warn-ink);
+  border-radius: 10px; padding: 10px 12px; margin: 0 0 12px; font-size: 14px;
+}
+.notice button {
+  display: block; width: 100%; margin-top: 8px; padding: 10px;
+  border: 1.5px solid currentColor; border-radius: 8px; background: transparent; font-weight: 700;
+}
+
+/* 時計 */
+.now { display: flex; align-items: baseline; justify-content: space-between; gap: 8px; }
+.date { font-size: 17px; font-weight: 600; }
+.status {
+  font-size: 14px; font-weight: 700; padding: 2px 12px; border-radius: 999px;
+  border: 1.5px solid var(--sub); color: var(--sub);
+}
+.status[data-s="ON"] { border-color: var(--c-in); color: var(--c-in); }
+.status[data-s="BREAK"] { border-color: var(--c-bs); color: var(--c-bs); }
+.clock {
+  font-size: clamp(56px, 19vw, 88px); font-weight: 700; line-height: 1.1;
+  font-variant-numeric: tabular-nums; letter-spacing: 0.01em; margin: 2px 0 10px;
+}
+.clock small { font-size: 0.42em; font-weight: 600; color: var(--sub); margin-left: 4px; }
+
+/* 今日のタイムカード */
+.card {
+  background: var(--card); border: 1px solid var(--rule); border-radius: 6px;
+  margin-bottom: 16px; overflow: hidden;
+}
+.card-head {
+  display: flex; justify-content: space-between; padding: 6px 12px;
+  border-bottom: 1px solid var(--rule); font-size: 13px; color: var(--sub);
+}
+.stamps { display: grid; grid-template-columns: repeat(4, 1fr); min-height: 62px; }
+.stamp { padding: 8px 4px 10px; text-align: center; border-right: 1px dashed var(--rule); border-bottom: 1px dashed var(--rule); }
+.stamp:nth-child(4n) { border-right: 0; }
+.stamp b { display: block; font-size: 12px; font-weight: 600; }
+.stamp span { font-size: 19px; font-weight: 700; font-variant-numeric: tabular-nums; }
+.stamp[data-k="in"] { color: var(--c-in); }
+.stamp[data-k="out"] { color: var(--c-out); }
+.stamp[data-k="bs"] { color: var(--c-bs); }
+.stamp[data-k="be"] { color: var(--c-be); }
+.empty { grid-column: 1 / -1; align-self: center; text-align: center; color: var(--sub); font-size: 14px; padding: 16px 8px; }
+
+/* 打刻ボタン */
+.pad { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+.pad button {
+  min-height: 104px; border: 0; border-radius: 14px; color: #fff;
+  font-size: 26px; font-weight: 700; letter-spacing: 0.04em;
+  transition: transform .08s ease, opacity .15s ease;
+}
+.pad button:active { transform: scale(0.97); }
+.pad button:disabled { opacity: 0.22; }
+.pad [data-k="in"] { background: var(--c-in); }
+.pad [data-k="out"] { background: var(--c-out); }
+.pad [data-k="bs"] { background: var(--c-bs); }
+.pad [data-k="be"] { background: var(--c-be); }
+.undo {
+  display: block; margin: 16px auto 0; padding: 10px 16px; background: none; border: 0;
+  color: var(--sub); font-size: 14px; text-decoration: underline; text-underline-offset: 3px;
+}
+.undo:disabled { visibility: hidden; }
+
+/* 月まとめ */
+.month-nav { display: flex; align-items: center; justify-content: space-between; margin-bottom: 10px; }
+.month-nav button {
+  width: 48px; height: 44px; border: 1px solid var(--rule); border-radius: 8px;
+  background: var(--card); font-size: 18px;
+}
+.month-nav strong { font-size: 20px; font-variant-numeric: tabular-nums; }
+pre.preview {
+  background: var(--card); border: 1px solid var(--rule); border-radius: 6px;
+  padding: 12px; margin: 0 0 12px; font: inherit; font-size: 14px; line-height: 1.7;
+  font-variant-numeric: tabular-nums; white-space: pre-wrap; word-break: break-all;
+  max-height: 46vh; overflow-y: auto;
+}
+.send { display: grid; gap: 10px; }
+.send a, .send button {
+  display: block; width: 100%; padding: 14px; border-radius: 12px; text-align: center;
+  font-size: 17px; font-weight: 700; text-decoration: none;
+}
+.send .line { background: #06C755; color: #fff; border: 0; }
+.send .alt { background: var(--card); color: var(--ink); border: 1.5px solid var(--rule); }
+.send [aria-disabled="true"], .send button:disabled { opacity: 0.3; pointer-events: none; }
+.hint { font-size: 13px; color: var(--sub); margin: 10px 0 0; }
+
+/* 設定 */
+label { display: block; font-weight: 600; margin-bottom: 4px; }
+input[type="text"] {
+  width: 100%; padding: 12px; font-size: 17px; background: var(--card);
+  border: 1.5px solid var(--rule); border-radius: 8px;
+}
+.settings section { margin-bottom: 24px; }
+.settings h2 { font-size: 16px; margin: 0 0 6px; }
+.settings p, .settings ol { margin: 0 0 8px; font-size: 14px; }
+.settings ol { padding-left: 1.4em; }
+.danger {
+  padding: 10px 14px; border: 1.5px solid var(--c-out); color: var(--c-out);
+  background: transparent; border-radius: 8px; font-size: 14px; font-weight: 600;
+}
+
+/* タブ */
+nav {
+  position: fixed; left: 0; right: 0; bottom: 0; display: flex;
+  background: var(--card); border-top: 1px solid var(--rule);
+  padding-bottom: env(safe-area-inset-bottom, 0px);
+}
+nav button {
+  flex: 1; height: 56px; border: 0; background: none; font-size: 15px; font-weight: 600; color: var(--sub);
+  border-top: 3px solid transparent;
+}
+nav button[aria-selected="true"] { color: var(--ink); border-top-color: var(--c-in); }
+
+/* 記録の確認表示 */
+.toast {
+  position: fixed; left: 50%; bottom: calc(84px + env(safe-area-inset-bottom, 0px));
+  transform: translateX(-50%); max-width: 90%;
+  background: var(--ink); color: var(--paper); padding: 10px 18px; border-radius: 999px;
+  font-size: 15px; font-weight: 600; white-space: nowrap;
+  opacity: 0; pointer-events: none; transition: opacity .2s ease;
+}
+.toast.show { opacity: 1; }
+@media (prefers-reduced-motion: reduce) { * { transition: none !important; } }
+</style>
+</head>
+<body>
+<main>
+  <!-- 打刻 -->
+  <div class="view" id="v-punch">
+    <div class="notice" id="n-home" hidden>
+      このままでは記録が消えることがあります。画面下の共有ボタンから「ホーム画面に追加」を選び、追加されたアイコンから開いて使ってください。
+    </div>
+    <div class="notice" id="n-store" hidden>
+      この画面では記録を保存できません。プライベートブラウズを解除するか、ホーム画面のアイコンから開いてください。
+    </div>
+    <div class="notice" id="n-carry" hidden>
+      <span id="carry-text"></span>
+      <button type="button" id="b-force">押し忘れた（今日の出勤を打刻する）</button>
+    </div>
+
+    <div class="now">
+      <span class="date" id="date"></span>
+      <span class="status" id="status" data-s="OFF"></span>
+    </div>
+    <div class="clock" id="clock" aria-live="off"></div>
+
+    <div class="card">
+      <div class="card-head"><span id="card-date"></span><span id="card-work"></span></div>
+      <div class="stamps" id="stamps"></div>
+    </div>
+
+    <div class="pad">
+      <button type="button" data-k="in">出勤</button>
+      <button type="button" data-k="out">退勤</button>
+      <button type="button" data-k="bs">休憩開始</button>
+      <button type="button" data-k="be">休憩終了</button>
+    </div>
+    <button type="button" class="undo" id="b-undo">直前の打刻を取り消す</button>
+  </div>
+
+  <!-- 月まとめ -->
+  <div class="view" id="v-month" hidden>
+    <div class="month-nav">
+      <button type="button" id="b-prev" aria-label="前の月">◀</button>
+      <strong id="month-label"></strong>
+      <button type="button" id="b-next" aria-label="次の月">▶</button>
+    </div>
+    <div class="notice" id="n-name" hidden>氏名が未設定です。「設定」で入力すると文面に入ります。</div>
+    <pre class="preview" id="preview"></pre>
+    <div class="send">
+      <a class="line" id="b-line" href="#" rel="noopener">LINEで送る</a>
+      <button type="button" class="alt" id="b-share">共有メニューから送る</button>
+      <button type="button" class="alt" id="b-copy">文面をコピー</button>
+    </div>
+    <p class="hint">「LINEで送る」を押すとLINEが開きます。送る相手を選んで送信してください。LINEが開かないときは「共有メニューから送る」でLINEを選びます。</p>
+  </div>
+
+  <!-- 設定 -->
+  <div class="view settings" id="v-set" hidden>
+    <h1>設定</h1>
+    <section>
+      <label for="name">氏名</label>
+      <input type="text" id="name" autocomplete="name" placeholder="山田太郎" maxlength="30">
+      <p class="hint">月まとめの文面の先頭に入ります。</p>
+    </section>
+    <section>
+      <h2>ホーム画面に追加する</h2>
+      <ol>
+        <li>Safariでこのページを開く</li>
+        <li>画面下の共有ボタン（四角から矢印が出ている形）を押す</li>
+        <li>「ホーム画面に追加」を選ぶ</li>
+        <li>以後はホーム画面の「打刻」アイコンから開く</li>
+      </ol>
+      <p>Safariで開いたときの記録と、アイコンから開いたときの記録は別々に保存されます。必ずアイコンから使ってください。</p>
+    </section>
+    <section>
+      <h2>記録の保存場所</h2>
+      <p>打刻はこのiPhoneの中だけに保存されます。機種変更やアイコンの削除で消えるため、月が終わったら「月まとめ」から送信してください。</p>
+      <button type="button" class="danger" id="b-clear">すべての記録を消す</button>
+    </section>
+  </div>
+</main>
+
+<nav role="tablist">
+  <button type="button" role="tab" data-v="v-punch" aria-selected="true">打刻</button>
+  <button type="button" role="tab" data-v="v-month" aria-selected="false">月まとめ</button>
+  <button type="button" role="tab" data-v="v-set" aria-selected="false">設定</button>
+</nav>
+<div class="toast" id="toast" role="status" aria-live="polite"></div>
+
+<script>
+/* ===== 計算（画面に依存しない部分） ===== */
+var LABEL = { in: '出勤', out: '退勤', bs: '休憩開始', be: '休憩終了' };
+var SHORT = { in: '出勤', out: '退勤', bs: '休憩', be: '戻り' };
+var STALE_MS = 20 * 3600000; // 出勤から20時間たっても退勤がなければ退勤漏れとして扱う
+
+function pad(n) { return (n < 10 ? '0' : '') + n; }
+function ymd(d) { return d.getFullYear() + '-' + pad(d.getMonth() + 1) + '-' + pad(d.getDate()); }
+function dayBase(wd) { var a = wd.split('-'); return new Date(+a[0], +a[1] - 1, +a[2]).getTime(); }
+function dow(wd) { return '日月火水木金土'.charAt(new Date(dayBase(wd)).getDay()); }
+function dur(min) { return Math.floor(min / 60) + ':' + pad(min % 60); }
+/** 勤務日0:00からの分を時刻に。日付をまたいだ分は「翌」を付ける */
+function hm(min) {
+  var m = ((min % 1440) + 1440) % 1440;
+  return (min >= 1440 ? '翌' : '') + pad(Math.floor(m / 60)) + ':' + pad(m % 60);
+}
+
+/** 現在の状態。s: OFF=未出勤・退勤済み / ON=勤務中 / BREAK=休憩中 */
+function getState(punches, now) {
+  if (!punches.length) return { s: 'OFF' };
+  var last = punches[punches.length - 1];
+  if (last.k === 'out') return { s: 'OFF' };
+  var inn = null;
+  for (var i = punches.length - 1; i >= 0; i--) {
+    if (punches[i].k === 'in') { inn = punches[i]; break; }
+    if (punches[i].k === 'out') break;
+  }
+  if (!inn) return { s: 'OFF' };
+  if (now - inn.t > STALE_MS) return { s: 'OFF', stale: inn };
+  return { s: last.k === 'bs' ? 'BREAK' : 'ON', inn: inn, carry: inn.d !== ymd(new Date(now)) };
+}
+
+/** 1勤務日分の打刻をまとめる。時刻は分未満を切り捨てて計算する */
+function calcDay(wd, list) {
+  var base = dayBase(wd), segs = [], breaks = [], notes = [], cur = null, brk = null;
+  function note(n) { if (notes.indexOf(n) < 0) notes.push(n); }
+  list.slice().sort(function (a, b) { return a.t - b.t; }).forEach(function (p) {
+    var m = Math.floor((p.t - base) / 60000);
+    if (p.k === 'in') {
+      if (cur && cur.out === null) note('退勤なし');
+      cur = { in: m, out: null, brk: 0 }; brk = null; segs.push(cur);
+    } else if (!cur || cur.out !== null) {
+      note('打刻の順番が不正');
+    } else if (p.k === 'bs') {
+      if (brk !== null) note('休憩の打刻が重複'); else brk = m;
+    } else if (p.k === 'be') {
+      if (brk === null) note('休憩開始なし');
+      else { breaks.push([brk, m]); cur.brk += m - brk; brk = null; }
+    } else if (p.k === 'out') {
+      if (brk !== null) { breaks.push([brk, m]); cur.brk += m - brk; brk = null; note('休憩終了なし'); }
+      cur.out = m;
+    }
+  });
+  var open = segs.length > 0 && segs[segs.length - 1].out === null;
+  var work = 0, brkSum = 0;
+  segs.forEach(function (s) { if (s.out !== null) { work += s.out - s.in - s.brk; brkSum += s.brk; } });
+  return { segs: segs, breaks: breaks, notes: notes, open: open, onBreak: open && brk !== null,
+           workMin: segs.length && !open ? work : null, breakMin: brkSum };
+}
+
+/** 指定した月（"2026-10"）の送信用の文面を作る。activeDay は勤務中の勤務日 */
+function monthText(punches, ym, name, activeDay) {
+  var days = {};
+  punches.forEach(function (p) { if (p.d.slice(0, 7) === ym) (days[p.d] = days[p.d] || []).push(p); });
+  var keys = Object.keys(days).sort();
+  var a = ym.split('-');
+  var lines = ['【打刻】' + (name || '氏名未設定') + ' ' + a[0] + '年' + (+a[1]) + '月'];
+  var total = 0, pending = 0;
+  keys.forEach(function (wd) {
+    var c = calcDay(wd, days[wd]);
+    var s = wd.slice(5).replace('-', '/') + '(' + dow(wd) + ') ' +
+      c.segs.map(function (g) { return hm(g.in) + '-' + (g.out === null ? '' : hm(g.out)); }).join(' / ');
+    if (c.breaks.length) s += ' 休' + c.breaks.map(function (b) { return hm(b[0]) + '-' + hm(b[1]); }).join(',');
+    var notes = c.notes.slice();
+    if (c.workMin !== null) { s += ' 実働' + dur(c.workMin); total += c.workMin; }
+    else { pending++; if (c.open) notes.push(wd === activeDay ? '勤務中' : '退勤なし'); }
+    if (notes.length) s += ' ※' + notes.filter(function (n, i) { return notes.indexOf(n) === i; }).join('・');
+    lines.push(s);
+  });
+  if (!keys.length) return { text: '', days: 0 };
+  lines.push('出勤' + keys.length + '日 実働合計' + dur(total) + (pending ? '（未確定' + pending + '日を除く）' : ''));
+  return { text: lines.join('\n'), days: keys.length };
+}
+/* ===== 計算ここまで ===== */
+
+/* ===== 保存 ===== */
+var KEY = 'dakoku.v1';
+var storageOk = true;
+var db = (function () {
+  try {
+    var s = localStorage.getItem(KEY);
+    if (s) { var d = JSON.parse(s); if (d && Array.isArray(d.p)) return d; }
+  } catch (e) { storageOk = false; }
+  return { name: '', p: [] };
+})();
+function save() {
+  try { localStorage.setItem(KEY, JSON.stringify(db)); return true; }
+  catch (e) { storageOk = false; return false; }
+}
+try { // 保存できるかを先に確かめる
+  localStorage.setItem(KEY + '.t', '1'); localStorage.removeItem(KEY + '.t');
+  if (navigator.storage && navigator.storage.persist) navigator.storage.persist();
+} catch (e) { storageOk = false; }
+
+/* ===== 画面 ===== */
+function $(id) { return document.getElementById(id); }
+var viewMonth = ymd(new Date()).slice(0, 7);
+var toastTimer = null;
+
+function toast(msg) {
+  var t = $('toast'); t.textContent = msg; t.classList.add('show');
+  clearTimeout(toastTimer); toastTimer = setTimeout(function () { t.classList.remove('show'); }, 2600);
+}
+function clockHm(t) { var d = new Date(t); return pad(d.getHours()) + ':' + pad(d.getMinutes()); }
+
+function tick() {
+  var d = new Date();
+  $('clock').innerHTML = pad(d.getHours()) + ':' + pad(d.getMinutes()) + '<small>' + pad(d.getSeconds()) + '</small>';
+  $('date').textContent = (d.getMonth() + 1) + '月' + d.getDate() + '日（' + '日月火水木金土'.charAt(d.getDay()) + '）';
+}
+
+function render() {
+  var now = Date.now(), st = getState(db.p, now), today = ymd(new Date(now));
+
+  $('status').dataset.s = st.s;
+  $('status').textContent = { OFF: '勤務外', ON: '勤務中', BREAK: '休憩中' }[st.s];
+
+  var ok = { in: st.s === 'OFF', out: st.s === 'ON', bs: st.s === 'ON', be: st.s === 'BREAK' };
+  document.querySelectorAll('.pad button').forEach(function (b) { b.disabled = !ok[b.dataset.k]; });
+  $('b-undo').disabled = !db.p.length;
+
+  // 前日からの勤務が続いているとき
+  $('n-carry').hidden = !st.carry;
+  if (st.carry) {
+    var a = st.inn.d.split('-');
+    $('carry-text').textContent = (+a[1]) + '月' + (+a[2]) + '日 ' + clockHm(st.inn.t) +
+      ' に出勤した勤務が続いています。夜勤などで勤務中ならそのまま打刻してください。';
+  }
+
+  // 今日のタイムカード
+  var wd = st.s === 'OFF' ? today : st.inn.d;
+  var list = db.p.filter(function (p) { return p.d === wd; });
+  var b = wd.split('-');
+  $('card-date').textContent = (+b[1]) + '/' + (+b[2]) + '（' + dow(wd) + '）の打刻';
+  var c = calcDay(wd, list);
+  $('card-work').textContent = c.workMin !== null ? '実働 ' + dur(c.workMin) : '';
+  $('stamps').innerHTML = list.length
+    ? list.map(function (p) { return '<div class="stamp" data-k="' + p.k + '"><b>' + SHORT[p.k] + '</b><span>' + clockHm(p.t) + '</span></div>'; }).join('')
+    : '<div class="empty">まだ打刻がありません。「出勤」を押してください。</div>';
+
+  $('n-home').hidden = !(/iphone|ipad|ipod/i.test(navigator.userAgent) && navigator.standalone === false);
+  $('n-store').hidden = storageOk;
+
+  renderMonth(st);
+}
+
+function renderMonth(st) {
+  st = st || getState(db.p, Date.now());
+  var a = viewMonth.split('-');
+  $('month-label').textContent = a[0] + '年' + (+a[1]) + '月';
+  var r = monthText(db.p, viewMonth, db.name, st.inn ? st.inn.d : null);
+  $('preview').textContent = r.text || 'この月の打刻はありません。';
+  $('n-name').hidden = !!db.name || !r.days;
+  var line = $('b-line');
+  line.href = r.text ? 'https://line.me/R/share?text=' + encodeURIComponent(r.text) : '#';
+  line.setAttribute('aria-disabled', r.text ? 'false' : 'true');
+  $('b-share').disabled = !r.text;
+  $('b-share').hidden = !navigator.share;
+  $('b-copy').disabled = !r.text;
+}
+
+function punch(k, force) {
+  var now = Date.now(), st = getState(db.p, now), d;
+  if (k === 'in') {
+    if (st.s !== 'OFF' && !force) return;
+    d = ymd(new Date(now));
+  } else {
+    if ((k === 'be' && st.s !== 'BREAK') || (k !== 'be' && st.s !== 'ON')) return;
+    d = st.inn.d;
+  }
+  db.p.push({ t: now, k: k, d: d });
+  if (!save()) { db.p.pop(); render(); toast('保存できませんでした'); return; }
+  render();
+  toast(LABEL[k] + ' ' + clockHm(now) + ' を記録しました');
+}
+
+function shiftMonth(n) {
+  var a = viewMonth.split('-'), d = new Date(+a[0], +a[1] - 1 + n, 1);
+  viewMonth = ymd(d).slice(0, 7);
+  renderMonth();
+}
+
+function copyText(text) {
+  if (navigator.clipboard && navigator.clipboard.writeText) {
+    return navigator.clipboard.writeText(text);
+  }
+  return new Promise(function (resolve, reject) {
+    var ta = document.createElement('textarea');
+    ta.value = text; ta.setAttribute('readonly', ''); ta.style.position = 'fixed'; ta.style.opacity = '0';
+    document.body.appendChild(ta); ta.select(); ta.setSelectionRange(0, text.length);
+    var ok = false; try { ok = document.execCommand('copy'); } catch (e) {}
+    document.body.removeChild(ta); ok ? resolve() : reject();
+  });
+}
+
+/* ===== 操作 ===== */
+document.querySelectorAll('.pad button').forEach(function (b) {
+  b.addEventListener('click', function () { punch(b.dataset.k); });
+});
+$('b-force').addEventListener('click', function () {
+  if (confirm('前回の退勤は「退勤なし」のまま残ります。今日の出勤を打刻しますか？')) punch('in', true);
+});
+$('b-undo').addEventListener('click', function () {
+  var p = db.p[db.p.length - 1];
+  if (!p) return;
+  if (!confirm(LABEL[p.k] + ' ' + clockHm(p.t) + ' を取り消しますか？')) return;
+  db.p.pop(); save(); render(); toast('取り消しました');
+});
+$('b-prev').addEventListener('click', function () { shiftMonth(-1); });
+$('b-next').addEventListener('click', function () { shiftMonth(1); });
+$('b-line').addEventListener('click', function (e) {
+  if (this.getAttribute('aria-disabled') === 'true') e.preventDefault();
+});
+$('b-share').addEventListener('click', function () {
+  var text = $('preview').textContent;
+  navigator.share({ text: text }).catch(function () {});
+});
+$('b-copy').addEventListener('click', function () {
+  copyText($('preview').textContent).then(
+    function () { toast('コピーしました'); },
+    function () { toast('コピーできませんでした'); });
+});
+$('name').value = db.name || '';
+$('name').addEventListener('input', function () { db.name = this.value.trim(); save(); renderMonth(); });
+$('b-clear').addEventListener('click', function () {
+  if (!confirm('すべての打刻記録を消します。元に戻せません。よろしいですか？')) return;
+  if (!confirm('本当に消しますか？送信していない月の記録も消えます。')) return;
+  db.p = []; save(); render(); toast('すべて消しました');
+});
+document.querySelectorAll('nav button').forEach(function (b) {
+  b.addEventListener('click', function () {
+    document.querySelectorAll('nav button').forEach(function (x) { x.setAttribute('aria-selected', x === b ? 'true' : 'false'); });
+    document.querySelectorAll('.view').forEach(function (v) { v.hidden = v.id !== b.dataset.v; });
+    if (b.dataset.v === 'v-month') { viewMonth = ymd(new Date()).slice(0, 7); }
+    render(); window.scrollTo(0, 0);
+  });
+});
+document.addEventListener('visibilitychange', function () { if (!document.hidden) { tick(); render(); } });
+setInterval(tick, 1000);
+setInterval(render, 30000);
+tick(); render();
+</script>
+</body>
+</html>
